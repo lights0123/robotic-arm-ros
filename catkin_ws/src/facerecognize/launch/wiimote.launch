@@ -1,0 +1,5 @@
+<launch>
+  <include file="$(find raspicam_node)/launch/camerav2_1280x960.launch"/>
+  <!--<node name="line_pid_wii" pkg="wiimote" type="line_pid_wii" output="screen"/>-->
+  <node name="line_detector_wii" pkg="facerecognize" type="line_detector_wii" output="screen"/>
+</launch>
