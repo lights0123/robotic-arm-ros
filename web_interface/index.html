@@ -132,6 +132,49 @@
         }
     </style>
     <script>
+		var ros = new ROSLIB.Ros({
+			url: 'ws://10.0.1.111:9090'
+		});
+
+		ros.on('connection', function () {
+			console.log('Connected to websocket server.');
+		});
+
+		ros.on('error', function (error) {
+			console.log('Error connecting to websocket server: ', error);
+		});
+
+		ros.on('close', function () {
+			console.log('Connection to websocket server closed.');
+		});
+		var temperatureListener = new ROSLIB.Topic({
+			ros: ros,
+			name: '/rpi/cpu_temp',
+			messageType: 'sensor_msgs/Temperature'
+		});
+		var joints = [];
+		for (let i = 1; i <= 5; i++) {
+			joints.push(new ROSLIB.Topic({
+				ros: ros,
+				name: '/robot_arm/joint' + i,
+				messageType: 'std_msgs/UInt16'
+			}));
+		}
+		var cmdVel = new ROSLIB.Topic({
+			ros: ros,
+			name: '/cmd_vel',
+			messageType: 'geometry_msgs/Twist'
+		});
+
+
+		temperatureListener.subscribe(function (message) {
+			updateGuage("temp-guage", toDegrees(message.temperature).toFixed(2) + " °F", map(message.temperature, 15, 70, 0, 100));
+		});
+
+		function toDegrees(celsius) {
+			return celsius * 1.8 + 32;
+		}
+
 		function colorMix(color1, color2, ratio) {
 			var hex = function (x) {
 				x = x.toString(16);
@@ -162,37 +205,137 @@
 			});
 		}
 
-		function map(x,in_min,in_max,out_min,out_max){
-			return (x-in_min) * (out_max-out_min) / (in_max - in_min) + out_min;
-        }
+		function map(x, in_min, in_max, out_min, out_max) {
+			return (x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min;
+		}
 
-		/*socketio.on("temperature",data=>{
-			updateGuage("temp-guage",(data*1.8+32).toFixed(2)+" °F",map(data,15,70,0,100))
-        });
+		function random(min, max) {
+			return Math.random() * (max - min) + min;
+		}
 
-		socketio.on("battery",data=>{
-			updateGuage("batt-guage",data.toFixed(2)+" V",map(data,7,9,0,100))
-        });*/
-        function random(min,max){
-        	return Math.random()*(max-min)+min;
-        }
-		document.addEventListener("DOMContentLoaded",()=>{
-			updateGuage("temp-guage",(40*1.8+32).toFixed(2)+" °F",map(40,15,70,0,100));
-			updateGuage("batt-guage",8.15.toFixed(2)+" V",map(8.15,7,9,0,100));
-			setInterval(()=>{
-				var temp = random(39,41);
-				updateGuage("temp-guage",(temp*1.8+32).toFixed(2)+" °F",map(temp,15,70,0,100));
-				var batt = random(8,8.05);
-				updateGuage("batt-guage",batt.toFixed(2)+" V",map(batt,7,9,0,100));
-			},400);
-        });
+		document.addEventListener("DOMContentLoaded", () => {
+			updateGuage("temp-guage", toDegrees(47).toFixed(2) + " °F", map(40, 15, 70, 0, 100));
+			updateGuage("motor-batt-guage", 8.0.toFixed(2) + " V", map(8.15, 7, 9, 0, 100));
+			updateGuage("logic-batt-guage", 8.0.toFixed(2) + " V", map(8.15, 7, 9, 0, 100));
+			setInterval(() => {
+				var batt = random(8, 8.01);
+				updateGuage("motor-batt-guage", batt.toFixed(2) + " V", map(batt, 6, 9, 0, 100));
+				updateGuage("logic-batt-guage", batt.toFixed(2) + " V", map(batt, 6, 9, 0, 100));
+			}, 400);
+		});
+
+		var timerStore = 0;
+		var pos2000 = new ROSLIB.Message({data: 2000});
+		var pos1000 = new ROSLIB.Message({data: 1000});
+		var pos1500 = new ROSLIB.Message({data: 1500});
+
+		function startTimer() {
+			clearTimeout(timerStore);
+			timerStore = setTimeout(() => {
+				joints[4].publish(pos2000);
+				timerStore = setTimeout(() => {
+					joints[4].publish(pos1000);
+					timerStore = setTimeout(() => {
+						joints[3].publish(pos2000);
+						timerStore = setTimeout(() => {
+							joints[3].publish(pos1000);
+							timerStore = setTimeout(() => {
+								joints[2].publish(pos1500);
+								timerStore = setTimeout(() => {
+									joints[2].publish(pos2000);
+									timerStore = setTimeout(() => {
+										joints[1].publish(pos2000);
+										timerStore = setTimeout(() => {
+											joints[1].publish(pos1000);
+										}, 1000 * 2);
+									}, 1000 * 50);
+								}, 1000 * 2);
+							}, 1000 * 58);
+						}, 1000 * 2);
+					}, 1000 * 58);
+				}, 1000 * 2);
+			}, 1000 * 58);
+		}
+		let currKey = null;
+
+		function go() {
+			let keyName;
+			switch (currKey) {
+				case 37:
+					keyName = 'left';
+					break;
+				case 38:
+					keyName = 'up';
+					break;
+				case 39:
+					keyName = 'right';
+					break;
+				case 40:
+					keyName = 'down';
+					break;
+				default:
+					keyName = null;
+					break;
+			}
+			if (keyName === null) {
+				cmdVel.publish(new ROSLIB.Message({
+					linear: {
+						x: 0
+					},
+					angular: {
+						z: 0
+					}
+				}));
+				return;
+			}
+			let angular;
+			switch (keyName) {
+				case 'left':
+					angular = -1;
+					break;
+				case 'right':
+					angular = 1;
+					break;
+				default:
+					angular = 0;
+			}
+			cmdVel.publish(new ROSLIB.Message({
+				linear: {
+					x: keyName === 'down' ? -1 : 1
+				},
+				angular: {
+					z: angular
+				}
+			}));
+		}
+
+		setInterval(go, 500);
+		document.onkeydown = e => {
+			let key = e.keyCode;
+			if (currKey != null) return;
+			if (key <= 41 && key >= 37) currKey = key;
+			go();
+		};
+		document.onkeyup = e => {
+			if (e.keyCode === currKey) {
+				currKey = null;
+				cmdVel.publish(new ROSLIB.Message({
+					linear: {
+						x: 0
+					},
+					angular: {
+						z: 0
+					}
+				}))
+			}
+		};
     </script>
 </head>
 <body>
 <div class="flexbox">
     <div>
         <h1>Camera Stream</h1>
-        <img src="http://172.20.10.13:8181/cam.mjpg" width="500px;"/>
+        <img src="http://10.0.1.111:8080/stream?topic=/face_detected" width="500px;"/>
     </div>
     <div>
         <h1>Status</h1>
@@ -204,14 +347,23 @@
                     <div class="value"></div>
                 </div>
         </span>
-        <h3>Battery Voltage</h3>
-        <span class="gauge gauge-40" id="batt-guage">
+        <h3>Battery Voltage - Motors</h3>
+        <span class="gauge gauge-40" id="motor-batt-guage">
                 <div class="outer">
                     <div class="inner"></div>
                     <div class="cover"></div>
                     <div class="value"></div>
                 </div>
         </span>
+        <h3>Battery Voltage - Logic</h3>
+        <span class="gauge gauge-40" id="logic-batt-guage">
+                <div class="outer">
+                    <div class="inner"></div>
+                    <div class="cover"></div>
+                    <div class="value"></div>
+                </div>
+        </span>
+        <a href="#" onclick="startTimer()">Start Timer</a>
     </div>
 </div>
 </body>

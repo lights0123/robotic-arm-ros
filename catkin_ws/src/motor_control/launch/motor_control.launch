@@ -1,4 +1,11 @@
 <launch>
-	<include file="$(find raspicam_node)/launch/camerav2_1280x960.launch"/>
-	<node name="motor_control" pkg="motor_control" type="index.js" />
+	<include file="$(find raspi_cpu_temp)/launch/raspi_cpu_temp.launch"/>
+	<!--<include file="$(find mjpeg_stream)/launch/mjpeg_stream.launch"/>-->
+	<include file="$(find facerecognize)/launch/pyface.launch"/>
+	<include file="$(find rosbridge_server)/launch/rosbridge_websocket.launch">
+	    <arg name="port" value="9090" />
+    </include>
+	<node name="motor_control" pkg="motor_control" type="index.js" output="screen" />
+	<node name="web_video_server" type="web_video_server" pkg="web_video_server" />
+	<node name="republish" type="republish" pkg="image_transport" output="screen" args="compressed in:=/raspicam_node/image raw out:=/raspicam_node/image" />
 </launch>

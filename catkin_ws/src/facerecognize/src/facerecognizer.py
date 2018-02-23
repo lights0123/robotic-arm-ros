@@ -17,7 +17,7 @@ faceCascade = cv2.CascadeClassifier(cascPath)
 class image_converter:
 
   def __init__(self):
-    self.image_pub = rospy.Publisher("image_topic_2",Image)
+    self.image_pub = rospy.Publisher("face_detected",Image)
 
     self.bridge = CvBridge()
     self.image_sub = rospy.Subscriber("/raspicam_node/image",Image,self.callback)
@@ -36,11 +36,9 @@ class image_converter:
         minSize=(30, 30),
         flags = cv2.CASCADE_SCALE_IMAGE
     )
-    print("Found {0} faces!".format(len(faces)))
+    #print("Found {0} faces!".format(len(faces)))
     for (x, y, w, h) in faces:
         cv2.rectangle(cv_image, (x, y), (x+w, y+h), (0, 255, 0), 2)
-    cv2.imshow("Image window", cv_image)
-    cv2.waitKey(3)
 
     try:
       self.image_pub.publish(self.bridge.cv2_to_imgmsg(cv_image, "bgr8"))
